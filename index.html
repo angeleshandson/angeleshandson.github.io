@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-initial-scale=1.0">
+    <title>Habit Incubator</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN for sound generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* Custom styles for the button and layout */
+        body {
+            font-family: "Inter", sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f4f8; /* Light gray background */
+            margin: 0;
+            padding: 20px; /* Add some padding for smaller screens */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+        /* Style for the custom message box */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+        /* Styles for the session list items */
+        .session-item {
+            cursor: default; /* Default cursor for the whole item */
+            user-select: none; /* Prevent text selection on click */
+        }
+        .details-row {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            opacity: 0;
+        }
+        .details-row.show {
+            max-height: 100px; /* Adjust based on content height */
+            opacity: 1;
+        }
+        /* Tab specific styles */
+        .tab-button.active {
+            background-color: #3b82f6; /* Blue 600 */
+            color: white;
+            font-weight: 600;
+        }
+        .tab-button:not(.active) {
+            background-color: #e5e7eb; /* Gray 200 */
+            color: #4b5563; /* Gray 700 */
+        }
+
+        /* Filter button specific styles */
+        .filter-button.active-filter {
+            background-color: #10b981; /* Green 500 */
+            color: white;
+            font-weight: 600;
+        }
+        .filter-button:not(.active-filter) {
+            background-color: #d1d5db; /* Gray 300 */
+            color: #374151; /* Gray 800 */
+        }
+
+
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 400px;
+            position: relative;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #6b7280; /* Gray 500 */
+        }
+
+        /* Toggle switch styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 28px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 28px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #2196F3;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Alarm animation */
+        @keyframes interactivePulse {
+            0% { transform: scale(1) rotate(0deg); text-shadow: none; }
+            25% { transform: scale(1.1) rotate(5deg); text-shadow: 0 0 8px rgba(255, 255, 0, 0.7); }
+            50% { transform: scale(1) rotate(-5deg); text-shadow: 0 0 12px rgba(255, 255, 0, 0.9); }
+            75% { transform: scale(1.1) rotate(5deg); text-shadow: 0 0 8px rgba(255, 255, 0, 0.7); }
+            100% { transform: scale(1) rotate(0deg); text-shadow: none; }
+        }
+
+        .alarm-pulsing {
+            animation: interactivePulse 1.8s infinite ease-in-out; /* Slightly longer, smoother */
+            transform-origin: center center;
+            cursor: pointer; /* Ensure pointer cursor */
+        }
+        /* Styles for emojis to ensure better rendering */
+        .emoji-display {
+            font-size: 1em; /* Ensure it's not shrunk by default */
+            display: inline-block; /* Helps with vertical alignment of emojis */
+        }
+        /* Notes area styling */
+        .notes-area {
+            min-height: 20px; /* Ensure visibility even if empty */
+            padding: 4px 0;
+            cursor: text;
+        }
+        .notes-area:hover {
+            background-color: #f9fafb; /* Light hover effect */
+        }
+    </style>
+</head>
+<body>
+    <div class="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-lg max-w-lg w-full">
+        <h1 class="3xl font-bold text-gray-800 mb-6">Habit Incubator</h1>
+
+        <div class="mb-6 w-full">
+            <label for="habitNameInput" class="block text-gray-700 text-sm font-bold mb-2">
+                Activity Name:
+            </label>
+            <input
+                type="text"
+                id="habitNameInput"
+                placeholder="New time slot for e.g., Daily Reading, Exercise"
+                class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+        </div>
+
+        <!-- Display for ongoing activity -->
+        <div id="ongoingActivityDisplay" class="w-full text-center mb-4 p-3 bg-yellow-100 rounded-lg border border-yellow-200 hidden overflow-x-auto">
+            <p class="text-yellow-800 text-sm">
+                👣 <span id="ongoingHabitName" class="font-semibold"></span> ⏳
+                <span id="ongoingTimerInfo" class="text-xs text-yellow-700 font-normal ml-2 hidden whitespace-nowrap">
+                    (<span id="ongoingStartTime"></span> - <span id="ongoingElapsedTime"></span>
+                    <span id="ongoingAlarmSign" class="ml-1 cursor-pointer hidden text-lg">⏰🍅</span>)
+                </span>
+            </p>
+        </div>
+
+        <button
+            id="toggleButton"
+            class="px-8 py-4 text-2xl font-semibold text-white bg-blue-600 rounded-lg shadow-md
+                   hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75
+                   transition duration-300 ease-in-out transform hover:scale-105 mb-8"
+        >
+            Start
+        </button>
+
+        <!-- Today's Summary Section (now compact) -->
+        <p class="text-sm font-medium text-gray-500 mb-2">Today's Summary</p>
+        <div id="todaySummary" class="w-full bg-blue-50 p-4 rounded-lg border border-blue-200 mb-8 text-center text-gray-700 font-semibold text-lg">
+            Activities: <span id="summaryActivities">0</span> |
+            <span id="summaryTotalDuration">0m</span> |
+            <span id="summaryTomatoes">0 🍅</span> |
+            <span id="summaryGarlic">0 🧄</span>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex justify-center w-full mb-4">
+            <button id="sessionsTabBtn" class="tab-button px-4 py-2 rounded-l-lg transition duration-200 ease-in-out text-sm">Your Activities/button>
+            <button id="timetableTabBtn" class="tab-button px-4 py-2 rounded-r-lg transition duration-200 ease-in-out text-sm">Today's Timetable</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="tabContent" class="w-full">
+            <div id="sessionsList" class="tab-content w-full bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-60 overflow-y-auto">
+                <!-- New Filter Buttons for Sessions List - moved inside sessionsList -->
+                <div id="sessionFilterButtons" class="flex justify-center w-full mb-2">
+                    <button id="loadTodayBtn" class="filter-button px-3 py-1 rounded-l-lg text-xs transition duration-200 ease-in-out">Today</button>
+                    <button id="loadWeekBtn" class="filter-button px-3 py-1 text-xs transition duration-200 ease-in-out">This Week</button>
+                    <button id="loadMonthBtn" class="filter-button px-3 py-1 rounded-r-lg text-xs transition duration-200 ease-in-out">This Month</button>
+                </div>
+                <p class="text-gray-500 text-center">No sessions recorded yet.</p>
+            </div>
+            <div id="todayTimetable" class="tab-content w-full bg-green-50 p-4 rounded-lg border border-green-200 max-h-60 overflow-y-auto" style="display: none;">
+                <p class="text-gray-500 text-center">No activities recorded for today yet.</p>
+            </div>
+        </div>
+
+        <!-- Settings Button -->
+        <button id="openSettingsBtn" class="mt-6 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-300 transition duration-200 ease-in-out">
+            Settings
+        </button>
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="messageBox" class="message-box"></div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModalOverlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="closeSettingsBtn" class="modal-close-button">&times;</button>
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Settings</h3>
+            
+            <div class="flex items-center justify-between mb-4">
+                <label for="showOngoingTimerToggle" class="text-gray-700">Show Ongoing Timer</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="showOngoingTimerToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="flex items-center justify-between mb-4">
+                <label for="pomodoroAlarmToggle" class="text-gray-700">Pomodoro Alarm</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="pomodoroAlarmToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- New: Amend Name of Activity Toggle -->
+            <div class="flex items-center justify-between mb-4">
+                <label for="amendActivityNameToggle" class="text-gray-700">Amend Name of Activity</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="amendActivityNameToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- New: Export Today's Activity Toggle -->
+            <div class="flex items-center justify-between mb-4">
+                <label for="exportActivityToggle" class="text-gray-700">Export Today's Activity</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="exportActivityToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div id="alarmSoundSelection" class="mb-4 hidden">
+                <label for="alarmSoundSelect" class="block text-gray-700 text-sm font-bold mb-2">
+                    Choose Alarm Sound:
+                </label>
+                <select id="alarmSoundSelect" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="bell">🔔 Bell</option>
+                    <option value="chime">✨ Chime</option>
+                    <option value="synth">🎶 Synth Tone</option>
+                    <option value="ping">🔊 Ping</option>
+                    <option value="gong">🪘 Gong</option>
+                    <option value="xylophone">🎵 Xylophone</option>
+                    <option value="pluck">🎸 Pluck</option>
+                    <option value="bass">🎤 Bass</option>
+                    <option value="triangle">🔺 Triangle</option>
+                    <option value="marimba">🥁 Marimba</option>
+                    <option value="sine">〰️ Sine Wave</option>
+                    <option value="square">🔲 Square Wave</option>
+                    <option value="sawtooth">📈 Sawtooth Wave</option>
+                    <option value="triangleWave">📐 Triangle Wave</option>
+                    <option value="noise">🌫️ Noise Burst</option>
+                    <option value="metallic">⚙️ Metallic Hit</option>
+                    <option value="woodblock">🪵 Woodblock</option>
+                    <option value="cowbell">🐄 Cowbell</option>
+                    <option value="clap">👏 Clap</option>
+                    <option value="snare">🥁 Snare</option>
+                </select>
+            </div>
+
+            <!-- New: Rest Break Alarm Toggle -->
+            <div class="flex items-center justify-between mb-4">
+                <label for="restAlarmSoundToggle" class="text-gray-700">Rest Break Alarm</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="restAlarmSoundToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div id="restAlarmSoundSelection" class="mb-4 hidden">
+                <label for="restAlarmSoundSelect" class="block text-gray-700 text-sm font-bold mb-2">
+                    Choose Rest Alarm Sound:
+                </label>
+                <select id="restAlarmSoundSelect" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="bell">🔔 Bell</option>
+                    <option value="chime">✨ Chime</option>
+                    <option value="synth">🎶 Synth Tone</option>
+                    <option value="ping">🔊 Ping</option>
+                    <option value="gong">🪘 Gong</option>
+                    <option value="xylophone">🎵 Xylophone</option>
+                    <option value="pluck">🎸 Pluck</option>
+                    <option value="bass">🎤 Bass</option>
+                    <option value="triangle">🔺 Triangle</option>
+                    <option value="marimba">🥁 Marimba</option>
+                    <option value="sine">〰️ Sine Wave</option>
+                    <option value="square">🔲 Square Wave</option>
+                    <option value="sawtooth">📈 Sawtooth Wave</option>
+                    <option value="triangleWave">📐 Triangle Wave</option>
+                    <option value="noise">🌫️ Noise Burst</option>
+                    <option value="metallic">⚙️ Metallic Hit</option>
+                    <option value="woodblock">🪵 Woodblock</option>
+                    <option value="cowbell">🐄 Cowbell</option>
+                    <option value="clap">👏 Clap</option>
+                    <option value="snare">🥁 Snare</option>
+                </select>
+            </div>
+
+            <!-- New: Export CSV Button -->
+            <button id="exportCsvButton" class="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75 transition duration-200 ease-in-out hidden">
+                Export Today's CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModalOverlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="confirmMessage"></h3>
+            <div class="flex justify-end space-x-3">
+                <button id="confirmCancelBtn" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition duration-200">Cancel</button>
+                <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-200">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script goes here -->
+    <script>
+        // --- DOM Elements ---
+        const toggleButton = document.getElementById('toggleButton');
+        const habitNameInput = document.getElementById('habitNameInput');
+        const messageBox = document.getElementById('messageBox');
+        const ongoingActivityDisplay = document.getElementById('ongoingActivityDisplay');
+        const ongoingHabitNameSpan = document.getElementById('ongoingHabitName');
+        const ongoingAlarmSign = document.getElementById('ongoingAlarmSign');
+        
+        // Tab elements
+        const sessionsTabBtn = document.getElementById('sessionsTabBtn');
+        const timetableTabBtn = document.getElementById('timetableTabBtn');
+        const sessionsList = document.getElementById('sessionsList');
+        const todayTimetable = document.getElementById('todayTimetable');
+        // Filter buttons are now dynamically added inside sessionsList, so their references need to be re-obtained in renderSessions
+        let loadTodayBtn; // Declared globally, assigned in renderSessions
+        let loadWeekBtn;  // Declared globally, assigned in renderSessions
+        let loadMonthBtn; // Declared globally, assigned in renderSessions
+
+        // Summary elements
+        const summaryActivities = document.getElementById('summaryActivities');
+        const summaryTotalDuration = document.getElementById('summaryTotalDuration');
+        const summaryTomatoes = document.getElementById('summaryTomatoes');
+        const summaryGarlic = document.getElementById('summaryGarlic');
+
+        // Settings Modal elements
+        const settingsModalOverlay = document.getElementById('settingsModalOverlay');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const showOngoingTimerToggle = document.getElementById('showOngoingTimerToggle');
+        const pomodoroAlarmToggle = document.getElementById('pomodoroAlarmToggle');
+        const amendActivityNameToggle = document.getElementById('amendActivityNameToggle');
+        const exportActivityToggle = document.getElementById('exportActivityToggle');
+        const exportCsvButton = document.getElementById('exportCsvButton');
+        const alarmSoundSelection = document.getElementById('alarmSoundSelection');
+        const alarmSoundSelect = document.getElementById('alarmSoundSelect');
+
+        // New elements for Rest Break Alarm
+        const restAlarmSoundToggle = document.getElementById('restAlarmSoundToggle');
+        const restAlarmSoundSelection = document = document.getElementById('restAlarmSoundSelection');
+        const restAlarmSoundSelect = document.getElementById('restAlarmSoundSelect');
+
+        const ongoingTimerInfo = document.getElementById('ongoingTimerInfo');
+        const ongoingStartTimeSpan = document.getElementById('ongoingStartTime');
+        const ongoingElapsedTimeSpan = document.getElementById('ongoingElapsedTime');
+
+        // Confirmation Modal elements
+        const confirmModalOverlay = document.getElementById('confirmModalOverlay');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+        let confirmCallback = null; // To store the callback function for confirmation
+
+
+        let startTime = null;
+        let ongoingSessionData = null;
+        let ongoingTimerInterval = null;
+        let alarmSoundInterval = null;
+        let showOngoingTimerEnabled = false;
+        let pomodoroAlarmEnabled = false;
+        let amendActivityNameEnabled = false;
+        let exportActivityEnabled = false;
+        let selectedAlarmSound = 'bell';
+        let alarmSynth = null;
+        let lastAlarmedPomodoro = -1;
+
+        // New state variables for Pomodoro Break
+        let isBreakActive = false;
+        let breakStartTime = null;
+        let restAlarmEnabled = false; // New setting state for rest alarm
+        let selectedRestSound = 'bell'; // Default rest sound
+        let restAlarmTriggered = false; // Flag to ensure rest alarm only triggers once at break end
+        
+        const POMODORO_BREAK_DURATION_SECONDS = 5 * 60; // 5 minutes
+
+        let currentButtonState = 'start'; // 'start', 'stop', 'break-ongoing', 'break-done'
+        let currentSessionFilter = 'today'; // 'today', 'week', 'month'
+
+        // Initialize Tone.js context on first user interaction
+        document.body.addEventListener('click', async () => {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+        }, { once: true });
+
+
+        // Function to show a custom message box
+        function showMessage(message, duration = 3000) {
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Custom Confirmation Modal Functions
+        function showConfirmModal(message, onConfirm) {
+            confirmMessage.textContent = message;
+            confirmCallback = onConfirm;
+            confirmModalOverlay.classList.add('show');
+        }
+
+        function closeConfirmModal() {
+            confirmModalOverlay.classList.remove('show');
+            confirmCallback = null; // Clear the callback
+        }
+
+        confirmCancelBtn.addEventListener('click', closeConfirmModal);
+        confirmDeleteBtn.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            closeConfirmModal();
+        });
+
+
+        // Function to load sessions from localStorage
+        function loadSessions() {
+            const sessionsJson = localStorage.getItem('habitSessions');
+            return sessionsJson ? JSON.parse(sessionsJson) : [];
+        }
+
+        // Function to save sessions to localStorage
+        function saveSessions(sessions) {
+            localStorage.setItem('habitSessions', JSON.stringify(sessions));
+        }
+
+        // Function to load settings from localStorage
+        function loadSettings() {
+            const timerSetting = localStorage.getItem('showOngoingTimerEnabled');
+            showOngoingTimerEnabled = timerSetting === 'true'; 
+            showOngoingTimerToggle.checked = showOngoingTimerEnabled;
+
+            const alarmSetting = localStorage.getItem('pomodoroAlarmEnabled');
+            pomodoroAlarmEnabled = alarmSetting === 'true';
+            pomodoroAlarmToggle.checked = pomodoroAlarmEnabled;
+
+            const amendSetting = localStorage.getItem('amendActivityNameEnabled');
+            amendActivityNameEnabled = amendSetting === 'true';
+            amendActivityNameToggle.checked = amendSetting;
+
+            const exportSetting = localStorage.getItem('exportActivityEnabled');
+            exportActivityEnabled = exportSetting === 'true';
+            exportActivityToggle.checked = exportSetting;
+
+            const soundSetting = localStorage.getItem('selectedAlarmSound');
+            if (soundSetting) {
+                selectedAlarmSound = soundSetting;
+                alarmSoundSelect.value = selectedAlarmSound;
+            } else {
+                alarmSoundSelect.value = 'bell'; // Default if not found
+            }
+
+            // Load new rest alarm settings
+            const restAlarmSetting = localStorage.getItem('restAlarmEnabled');
+            restAlarmEnabled = restAlarmSetting === 'true';
+            restAlarmSoundToggle.checked = restAlarmEnabled;
+
+            const restSoundSetting = localStorage.getItem('selectedRestSound');
+            if (restSoundSetting) {
+                selectedRestSound = restSoundSetting;
+                restAlarmSoundSelect.value = restSoundSetting;
+            } else {
+                restAlarmSoundSelect.value = 'bell'; // Default if not found
+            }
+
+            // Show/hide sound selection based on pomodoro alarm toggle
+            if (pomodoroAlarmEnabled) {
+                alarmSoundSelection.classList.remove('hidden');
+            } else {
+                alarmSoundSelection.classList.add('hidden');
+            }
+
+            if (restAlarmEnabled) {
+                restAlarmSoundSelection.classList.remove('hidden');
+            } else {
+                restAlarmSoundSelection.classList.add('hidden');
+            }
+
+            // Show/hide export button based on export activity toggle
+            if (exportActivityEnabled) {
+                exportCsvButton.classList.remove('hidden');
+            } else {
+                exportCsvButton.classList.add('hidden');
+            }
+        }
+
+        // Function to save settings to localStorage
+        function saveSettings() {
+            localStorage.setItem('showOngoingTimerEnabled', showOngoingTimerToggle.checked);
+            showOngoingTimerEnabled = showOngoingTimerToggle.checked;
+
+            localStorage.setItem('pomodoroAlarmEnabled', pomodoroAlarmToggle.checked);
+            pomodoroAlarmEnabled = pomodoroAlarmToggle.checked;
+
+            localStorage.setItem('amendActivityNameEnabled', amendActivityNameToggle.checked);
+            amendActivityNameEnabled = amendActivityNameToggle.checked;
+
+            localStorage.setItem('exportActivityEnabled', exportActivityToggle.checked);
+            exportActivityEnabled = exportActivityToggle.checked;
+
+            localStorage.setItem('selectedAlarmSound', alarmSoundSelect.value);
+            selectedAlarmSound = alarmSoundSelect.value;
+
+            // Save new rest alarm settings
+            localStorage.setItem('restAlarmEnabled', restAlarmSoundToggle.checked);
+            restAlarmEnabled = restAlarmSoundToggle.checked;
+
+            localStorage.setItem('selectedRestSound', restAlarmSoundSelect.value);
+            selectedRestSound = restAlarmSoundSelect.value;
+
+            if (pomodoroAlarmEnabled) {
+                alarmSoundSelection.classList.remove('hidden');
+            } else {
+                alarmSoundSelection.classList.add('hidden');
+            }
+
+            if (restAlarmEnabled) {
+                restAlarmSoundSelection.classList.remove('hidden');
+            } else {
+                restAlarmSoundSelection.classList.add('hidden');
+            }
+
+            if (exportActivityEnabled) {
+                exportCsvButton.classList.remove('hidden');
+            } else {
+                exportCsvButton.classList.add('hidden');
+            }
+
+            // Re-evaluate ongoing display based on new settings
+            if (ongoingSessionData) {
+                // If there's an ongoing session (activity or break), restart timer to apply new settings
+                startOngoingTimer(); 
+            } else {
+                // If no ongoing session, just update display (which might hide it)
+                stopOngoingTimer(); // This clears the visual timer interval
+                stopAlarmSound(); // Explicitly stop any alarm sound
+                displayOngoingActivity();
+            }
+            renderSessions();
+        }
+
+        // Function to format duration from seconds to minutes and seconds (for individual sessions)
+        function formatDuration(totalSeconds) {
+            if (typeof totalSeconds !== 'number' || isNaN(totalSeconds)) {
+                return 'N/A';
+            }
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}m ${seconds}s`;
+        }
+
+        // Function to format duration for the summary (hours and minutes or just minutes)
+        function formatSummaryDuration(totalSeconds) {
+            if (typeof totalSeconds !== 'number' || isNaN(totalSeconds)) {
+                return 'N/A';
+            }
+            const totalMinutes = Math.floor(totalSeconds / 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const remainingMinutes = totalMinutes % 60;
+
+            if (hours >= 1) {
+                return `${hours}h ${remainingMinutes}m`;
+            } else {
+                return `${totalMinutes}m`;
+            }
+        }
+
+        // Function to get the correct emoji based on duration
+        function getDurationEmoji(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const tomatoes = Math.floor(minutes / 25);
+
+            if (tomatoes > 0) {
+                return '🍅'.repeat(tomatoes);
+            } else {
+                return '🧄';
+            }
+        }
+
+        // Function to display or hide the ongoing activity indicator
+        function displayOngoingActivity() {
+            if (ongoingSessionData) {
+                ongoingHabitNameSpan.textContent = ongoingSessionData.habitName;
+                ongoingActivityDisplay.classList.remove('hidden');
+                
+                // ongoingTimerInfo should be visible if showOngoingTimerEnabled OR pomodoroAlarmEnabled OR isBreakActive
+                if (showOngoingTimerEnabled || pomodoroAlarmEnabled || isBreakActive) {
+                    ongoingTimerInfo.classList.remove('hidden');
+                } else {
+                    ongoingTimerInfo.classList.add('hidden');
+                }
+
+                if (pomodoroAlarmEnabled && !isBreakActive) { // Only show alarm sign for pomodoro sessions
+                    ongoingAlarmSign.classList.remove('hidden');
+                } else {
+                    ongoingAlarmSign.classList.add('hidden');
+                }
+            } else {
+                ongoingHabitNameSpan.textContent = '';
+                ongoingActivityDisplay.classList.add('hidden');
+                ongoingTimerInfo.classList.add('hidden');
+                ongoingAlarmSign.classList.add('hidden');
+            }
+        }
+
+        // Function to update the ongoing timer display and check for pomodoro alarm
+        function updateOngoingTimer() {
+            if (!ongoingSessionData) {
+                stopOngoingTimer();
+                stopAlarmSound(); // Ensure alarm is off if no session
+                return;
+            }
+
+            const now = new Date();
+            const elapsedMs = now.getTime() - startTime.getTime();
+            const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+            if (isBreakActive) {
+                ongoingStartTimeSpan.textContent = "Break";
+                ongoingElapsedTimeSpan.textContent = formatDuration(elapsedSeconds);
+                ongoingTimerInfo.classList.remove('hidden'); // Ensure visible during break
+                console.log(`Break Timer: elapsedSeconds=${elapsedSeconds}, POMODORO_BREAK_DURATION_SECONDS=${POMODORO_BREAK_DURATION_SECONDS}, restAlarmTriggered=${restAlarmTriggered}`);
+
+                if (elapsedSeconds >= POMODORO_BREAK_DURATION_SECONDS) {
+                    // Break has ended its intended duration
+                    if (restAlarmEnabled && !restAlarmTriggered) { // Only trigger alarm once
+                        triggerAlarmSound('rest'); // Start repeating rest alarm
+                        showMessage("Rest break over! Time to start a new session.");
+                        restAlarmTriggered = true; // Set flag to prevent re-triggering
+                        console.log("Rest break alarm triggered.");
+                    }
+
+                    // Stop the visual timer (it's done counting down)
+                    if (ongoingTimerInterval) {
+                        clearInterval(ongoingTimerInterval);
+                        ongoingTimerInterval = null;
+                        console.log("Break timer interval cleared.");
+                    }
+                    // Set button state to 'break-done'
+                    setToggleButtonState('break-done');
+                    // IMPORTANT: Logging is now handled by the button click in 'break-done' state.
+                    // No logging here.
+                } else {
+                    // Break is still ongoing, no alarm pulsing
+                    ongoingAlarmSign.classList.remove('alarm-pulsing'); // Ensure no pulsing during break countdown
+                }
+
+            } else { // Regular habit session
+                if (showOngoingTimerEnabled || pomodoroAlarmEnabled) {
+                    ongoingStartTimeSpan.textContent = new Date(ongoingSessionData.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    ongoingElapsedTimeSpan.textContent = formatDuration(elapsedSeconds);
+                    ongoingTimerInfo.classList.remove('hidden');
+                } else {
+                    ongoingTimerInfo.classList.add('hidden');
+                }
+
+                if (pomodoroAlarmEnabled) {
+                    const currentPomodoro = Math.floor(elapsedSeconds / (25 * 60));
+                    console.log(`Activity Timer: elapsedSeconds=${elapsedSeconds}, currentPomodoro=${currentPomodoro}, lastAlarmedPomodoro=${lastAlarmedPomodoro}`);
+                    if (currentPomodoro > 0 && currentPomodoro > lastAlarmedPomodoro) {
+                        triggerAlarmSound('pomodoro'); // Play pomodoro alarm sound
+                        lastAlarmedPomodoro = currentPomodoro;
+                        console.log(`Pomodoro alarm triggered! Elapsed: ${elapsedSeconds}s, Current Pomodoro: ${currentPomodoro}`);
+                    }
+                    ongoingAlarmSign.classList.remove('hidden');
+                } else {
+                    ongoingAlarmSign.classList.add('hidden');
+                }
+            }
+        }
+
+        // Function to start the ongoing timer interval
+        function startOngoingTimer() {
+            if (ongoingTimerInterval) {
+                clearInterval(ongoingTimerInterval);
+            }
+            if (ongoingSessionData) {
+                updateOngoingTimer(); // Initial update
+                ongoingTimerInterval = setInterval(updateOngoingTimer, 1000);
+                console.log("Ongoing timer started.");
+            }
+        }
+
+        // Function to stop the ongoing timer interval (only the visual timer)
+        function stopOngoingTimer() {
+            if (ongoingTimerInterval) {
+                clearInterval(ongoingTimerInterval);
+                ongoingTimerInterval = null;
+                console.log("Ongoing timer stopped.");
+            }
+            lastAlarmedPomodoro = -1; // Reset pomodoro alarm tracker
+        }
+
+        // Tone.js Alarm Sound Functions
+        function initAlarmSynth() {
+            if (alarmSynth) {
+                alarmSynth.dispose();
+            }
+            alarmSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+            console.log("Alarm synth initialized.");
+        }
+
+        // Function to play a single instance of the alarm sound
+        function playSingleAlarmSound(soundToPlay) {
+            if (Tone.context.state !== 'running') {
+                Tone.start().then(() => {
+                    console.log("Tone.js context resumed.");
+                    if (!alarmSynth) initAlarmSynth();
+                    alarmSynth.releaseAll();
+                    const soundMap = { /* ... (sound definitions) ... */
+                        'bell': () => alarmSynth.triggerAttackRelease("C5", "8n"),
+                        'chime': () => alarmSynth.triggerAttackRelease(["E5", "G5", "C6"], "4n"),
+                        'synth': () => { alarmSynth.set({oscillator: {type: "sawtooth"}}); alarmSynth.triggerAttackRelease("A4", "4n"); },
+                        'ping': () => alarmSynth.triggerAttackRelease("C6", "16n", Tone.now(), 0.8),
+                        'gong': () => { alarmSynth.set({oscillator: {type: "sine"}}); alarmSynth.triggerAttackRelease("G2", "1n"); },
+                        'xylophone': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.7}}); alarmSynth.triggerAttackRelease("C5", "8n"); },
+                        'pluck': () => { alarmSynth.set({oscillator: {type: "triangle"}, envelope: {attack: 0.005, decay: 0.2, sustain: 0, release: 0.5}}); alarmSynth.triggerAttackRelease("E4", "8n"); },
+                        'bass': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.5}}); alarmSynth.triggerAttackRelease("C2", "4n"); },
+                        'triangle': () => { alarmSynth.set({oscillator: {type: "triangle"}}); alarmSynth.triggerAttackRelease("F5", "8n"); },
+                        'marimba': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.6}}); alarmSynth.triggerAttackRelease("G4", "8n"); },
+                        'sine': () => { alarmSynth.set({oscillator: {type: "sine"}}); alarmSynth.triggerAttackRelease("C4", "4n"); },
+                        'square': () => { alarmSynth.set({oscillator: {type: "square"}}); alarmSynth.triggerAttackRelease("D4", "4n"); },
+                        'sawtooth': () => { alarmSynth.set({oscillator: {type: "sawtooth"}}); alarmSynth.triggerAttackRelease("E4", "4n"); },
+                        'triangleWave': () => { alarmSynth.set({oscillator: {type: "triangle"}}); alarmSynth.triggerAttackRelease("F4", "4n"); },
+                        'noise': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C7", "16n"); },
+                        'metallic': () => { alarmSynth.set({oscillator: {type: "fmsine", fmRatio: 3, harmonicity: 0.5}, envelope: {attack: 0.001, decay: 0.3, sustain: 0, release: 0.5}}); alarmSynth.triggerAttackRelease("C5", "8n"); },
+                        'woodblock': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C4", "16n"); },
+                        'cowbell': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("G4", "16n"); },
+                        'clap': () => { alarmSynth.set({oscillator: {type: "sawtooth"}, envelope: {attack: 0.005, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C5", "16n"); },
+                        'snare': () => { alarmSynth.set({oscillator: {type: "triangle"}, envelope: {attack: 0.01, decay: 0.2, sustain: 0, release: 0.2}}); alarmSynth.triggerAttackRelease("C4", "8n"); },
+                    };
+                    const playFunction = soundMap[soundToPlay] || soundMap['bell'];
+                    playFunction();
+                    console.log(`Playing single alarm sound: ${soundToPlay}`);
+                });
+            } else {
+                if (!alarmSynth) {
+                    initAlarmSynth();
+                }
+                alarmSynth.releaseAll(); // Stop any currently playing notes
+                const soundMap = {
+                    'bell': () => alarmSynth.triggerAttackRelease("C5", "8n"),
+                    'chime': () => alarmSynth.triggerAttackRelease(["E5", "G5", "C6"], "4n"),
+                    'synth': () => { alarmSynth.set({oscillator: {type: "sawtooth"}}); alarmSynth.triggerAttackRelease("A4", "4n"); },
+                    'ping': () => alarmSynth.triggerAttackRelease("C6", "16n", Tone.now(), 0.8),
+                    'gong': () => { alarmSynth.set({oscillator: {type: "sine"}}); alarmSynth.triggerAttackRelease("G2", "1n"); },
+                    'xylophone': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.7}}); alarmSynth.triggerAttackRelease("C5", "8n"); },
+                    'pluck': () => { alarmSynth.set({oscillator: {type: "triangle"}, envelope: {attack: 0.005, decay: 0.2, sustain: 0, release: 0.5}}); alarmSynth.triggerAttackRelease("E4", "8n"); },
+                    'bass': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.5}}); alarmSynth.triggerAttackRelease("C2", "4n"); },
+                    'triangle': () => { alarmSynth.set({oscillator: {type: "triangle"}}); alarmSynth.triggerAttackRelease("F5", "8n"); },
+                    'marimba': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.6}}); alarmSynth.triggerAttackRelease("G4", "8n"); },
+                    'sine': () => { alarmSynth.set({oscillator: {type: "sine"}}); alarmSynth.triggerAttackRelease("C4", "4n"); },
+                    'square': () => { alarmSynth.set({oscillator: {type: "square"}}); alarmSynth.triggerAttackRelease("D4", "4n"); },
+                    'sawtooth': () => { alarmSynth.set({oscillator: {type: "sawtooth"}}); alarmSynth.triggerAttackRelease("E4", "4n"); },
+                    'triangleWave': () => { alarmSynth.set({oscillator: {type: "triangle"}}); alarmSynth.triggerAttackRelease("F4", "4n"); },
+                    'noise': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C7", "16n"); },
+                    'metallic': () => { alarmSynth.set({oscillator: {type: "fmsine", fmRatio: 3, harmonicity: 0.5}, envelope: {attack: 0.001, decay: 0.3, sustain: 0, release: 0.5}}); alarmSynth.triggerAttackRelease("C5", "8n"); },
+                    'woodblock': () => { alarmSynth.set({oscillator: {type: "sine"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C4", "16n"); },
+                    'cowbell': () => { alarmSynth.set({oscillator: {type: "square"}, envelope: {attack: 0.01, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("G4", "16n"); },
+                    'clap': () => { alarmSynth.set({oscillator: {type: "sawtooth"}, envelope: {attack: 0.005, decay: 0.1, sustain: 0, release: 0.1}}); alarmSynth.triggerAttackRelease("C5", "16n"); },
+                    'snare': () => { alarmSynth.set({oscillator: {type: "triangle"}, envelope: {attack: 0.01, decay: 0.2, sustain: 0, release: 0.2}}); alarmSynth.triggerAttackRelease("C4", "8n"); },
+                };
+                const playFunction = soundMap[soundToPlay] || soundMap['bell']; // Default to bell if sound not found
+                playFunction();
+                console.log(`Playing single alarm sound: ${soundToPlay}`);
+            }
+        }
+
+        // Function to trigger the repeating alarm sound
+        function triggerAlarmSound(soundType = 'pomodoro') { // Default to pomodoro
+            if (alarmSoundInterval) {
+                clearInterval(alarmSoundInterval);
+            }
+            // Only add pulsing animation for pomodoro alarm, not for rest break done sound
+            if (soundType === 'pomodoro') {
+                ongoingAlarmSign.classList.add('alarm-pulsing');
+            } else {
+                ongoingAlarmSign.classList.remove('alarm-pulsing');
+            }
+            
+            const soundToPlay = soundType === 'pomodoro' ? selectedAlarmSound : selectedRestSound;
+            playSingleAlarmSound(soundToPlay);
+            alarmSoundInterval = setInterval(() => playSingleAlarmSound(soundToPlay), 2000);
+            console.log(`Repeating alarm sound started: ${soundToPlay} for ${soundType}.`);
+        }
+
+        function stopAlarmSound() {
+            if (alarmSynth) {
+                alarmSynth.releaseAll();
+            }
+            if (alarmSoundInterval) {
+                clearInterval(alarmSoundInterval);
+                alarmSoundInterval = null;
+                console.log("Repeating alarm sound stopped.");
+            }
+            ongoingAlarmSign.classList.remove('alarm-pulsing');
+        }
+
+        // New function to start the Pomodoro break
+        function startPomodoroBreak() {
+            isBreakActive = true;
+            breakStartTime = new Date();
+            startTime = breakStartTime; // FIX: Ensure startTime is set for the break timer
+            // Store the break session data
+            ongoingSessionData = {
+                habitName: "Pomodoro Rest Break",
+                startTime: breakStartTime.toISOString(),
+                isBreak: true, // Mark this as a break session
+                logged: false // Flag to ensure it's logged only once
+            };
+            localStorage.setItem('ongoingHabitSession', JSON.stringify(ongoingSessionData));
+
+            setToggleButtonState('break-ongoing');
+
+            displayOngoingActivity();
+            startOngoingTimer(); // Start the timer for the break
+            showMessage("5-minute Pomodoro Rest Break started!");
+            console.log(`Starting Pomodoro Break. breakStartTime=${breakStartTime.toISOString()}, startTime=${startTime.toISOString()}`);
+        }
+
+        // New function to finalize and log the Pomodoro break session
+        function completePomodoroBreakSession() {
+            if (!ongoingSessionData || !ongoingSessionData.isBreak) {
+                console.error("Attempted to complete a break session when none was active or it wasn't a break.");
+                return;
+            }
+
+            const stopTime = new Date();
+            const durationMs = stopTime.getTime() - new Date(ongoingSessionData.startTime).getTime();
+            const durationSeconds = Math.floor(durationMs / 1000);
+
+            const sessionData = {
+                habitName: ongoingSessionData.habitName, // "Pomodoro Rest Break"
+                startTime: ongoingSessionData.startTime,
+                stopTime: stopTime.toISOString(),
+                durationSeconds: durationSeconds,
+                id: Date.now()
+            };
+
+            const sessions = loadSessions();
+            sessions.push(sessionData);
+            saveSessions(sessions);
+            console.log("Rest break session logged:", sessionData);
+
+
+            localStorage.removeItem('ongoingHabitSession'); // Clear ongoing break session
+            ongoingSessionData = null;
+            isBreakActive = false;
+            breakStartTime = null; // Reset break start time
+            restAlarmTriggered = false; // Reset alarm flag
+        }
+
+
+        // Function to calculate and render today's summary
+        function renderTodaySummary() {
+            const sessions = loadSessions();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let activitiesCount = 0;
+            let totalDurationTodaySeconds = 0;
+            let totalTomatoes = 0;
+            let totalGarlic = 0;
+
+            sessions.forEach(session => {
+                const sessionDate = new Date(session.stopTime);
+                sessionDate.setHours(0, 0, 0, 0);
+
+                if (sessionDate.getTime() === today.getTime()) {
+                    activitiesCount++;
+                    totalDurationTodaySeconds += session.durationSeconds;
+
+                    const minutes = Math.floor(session.durationSeconds / 60);
+                    const tomatoes = Math.floor(minutes / 25);
+                    if (tomatoes > 0) {
+                        totalTomatoes += tomatoes;
+                    } else {
+                        totalGarlic++;
+                    }
+                }
+            });
+
+            summaryActivities.textContent = activitiesCount;
+            summaryTotalDuration.textContent = formatSummaryDuration(totalDurationTodaySeconds);
+            summaryTomatoes.textContent = `${totalTomatoes} 🍅`;
+            summaryGarlic.textContent = `${totalGarlic} 🧄`; 
+        }
+
+        // Function to render today's timetable
+        function renderTimetable() {
+            const sessions = loadSessions();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const todaySessions = sessions.filter(session => {
+                const sessionDate = new Date(session.startTime);
+                sessionDate.setHours(0, 0, 0, 0);
+                return sessionDate.getTime() === today.getTime();
+            });
+
+            todaySessions.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+            todayTimetable.innerHTML = '';
+
+            if (todaySessions.length === 0) {
+                todayTimetable.innerHTML = '<p class="text-gray-500 text-center">No activities recorded for today yet.</p>';
+                return;
+            }
+
+            todaySessions.forEach(session => {
+                const startTime = new Date(session.startTime);
+                const stopTime = new Date(session.stopTime);
+
+                const startHour = startTime.getHours().toString().padStart(2, '0');
+                const startMinute = startTime.getMinutes().toString().padStart(2, '0');
+                const stopHour = stopTime.getHours().toString().padStart(2, '0');
+                const stopMinute = stopTime.getMinutes().toString().padStart(2, '0');
+
+                const timeString = `${startHour}:${startMinute} - ${stopHour}:${stopMinute}`;
+
+                const emoji = getDurationEmoji(session.durationSeconds);
+                const heartEmoji = (session.durationSeconds >= (90 * 60)) ? '💜 ' : '';
+
+                const p = document.createElement('p');
+                p.classList.add('text-sm', 'text-gray-700', 'mb-1');
+                p.innerHTML = `<span class="font-semibold">${timeString}</span>: ✔️ ${heartEmoji}${session.habitName} <span class="emoji-display">${emoji}</span>`;
+                todayTimetable.appendChild(p);
+            });
+        }
+
+        // Function to enable in-place editing for notes
+        function enableNotesEdit(sessionId, currentNotes) {
+            const notesContainer = document.getElementById(`notes-${sessionId}`);
+            if (!notesContainer) return; // Guard against element not found
+
+            const textarea = document.createElement('textarea');
+            textarea.value = currentNotes;
+            textarea.classList.add('w-full', 'p-2', 'rounded-md', 'border', 'border-blue-300', 'focus:outline-none', 'focus:ring-1', 'focus:ring-blue-500', 'text-xs', 'text-gray-700');
+            textarea.rows = 3; // Adjust height as needed
+
+            notesContainer.innerHTML = ''; // Clear existing content
+            notesContainer.appendChild(textarea);
+            textarea.focus();
+
+            const saveNotes = () => {
+                const newNotes = textarea.value.trim();
+                let sessions = loadSessions();
+                const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+                if (sessionIndex !== -1) {
+                    sessions[sessionIndex].notes = newNotes;
+                    saveSessions(sessions);
+                    showMessage(`Notes updated for "${sessions[sessionIndex].habitName}"!`);
+                    renderSessions(); // Re-render to show updated notes and non-editable state
+                } else {
+                    renderSessions(); // Re-render to restore original content if session not found
+                }
+            };
+
+            textarea.addEventListener('blur', saveNotes);
+            textarea.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { // Allow Shift+Enter for new line
+                    e.preventDefault(); // Prevent default Enter behavior (new line)
+                    saveNotes();
+                }
+            });
+        }
+
+
+        // Function to render sessions to the UI
+        function renderSessions() {
+            const sessions = loadSessions();
+            sessionsList.innerHTML = ''; // Clear existing content
+
+            // Re-add the filter buttons since sessionsList is cleared
+            const filterButtonsHtml = `
+                <div id="sessionFilterButtons" class="flex justify-center w-full mb-2">
+                    <button id="loadTodayBtn" class="filter-button px-3 py-1 rounded-l-lg text-xs transition duration-200 ease-in-out">Today</button>
+                    <button id="loadWeekBtn" class="filter-button px-3 py-1 text-xs transition duration-200 ease-in-out">This Week</button>
+                    <button id="loadMonthBtn" class="filter-button px-3 py-1 rounded-r-lg text-xs transition duration-200 ease-in-out">This Month</button>
+                </div>
+            `;
+            sessionsList.insertAdjacentHTML('afterbegin', filterButtonsHtml);
+
+            // Re-get references to the newly added buttons
+            loadTodayBtn = document.getElementById('loadTodayBtn'); // Assign to global variable
+            loadWeekBtn = document.getElementById('loadWeekBtn');  // Assign to global variable
+            loadMonthBtn = document.getElementById('loadMonthBtn'); // Assign to global variable
+
+            // Re-attach event listeners to the new buttons
+            loadTodayBtn.addEventListener('click', () => {
+                currentSessionFilter = 'today';
+                renderSessions();
+                updateFilterButtonsActiveState();
+            });
+            loadWeekBtn.addEventListener('click', () => {
+                currentSessionFilter = 'week';
+                renderSessions();
+                updateFilterButtonsActiveState();
+            });
+            loadMonthBtn.addEventListener('click', () => {
+                currentSessionFilter = 'month';
+                renderSessions();
+                updateFilterButtonsActiveState();
+            });
+            
+            updateFilterButtonsActiveState(); // Update active state for filter buttons
+
+
+            if (sessions.length === 0) {
+                sessionsList.insertAdjacentHTML('beforeend', '<p class="text-gray-500 text-center">No sessions recorded yet.</p>');
+                return;
+            }
+
+            let filteredSessions = [];
+            const now = new Date();
+            now.setHours(0, 0, 0, 0); // Normalize 'now' to start of day for comparison
+
+            switch (currentSessionFilter) {
+                case 'today':
+                    filteredSessions = sessions.filter(session => {
+                        const sessionDate = new Date(session.stopTime);
+                        sessionDate.setHours(0, 0, 0, 0);
+                        return sessionDate.getTime() === now.getTime();
+                    });
+                    break;
+                case 'week':
+                    // Get the start of the current week (Sunday)
+                    const startOfWeek = new Date(now);
+                    startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday is 0
+                    startOfWeek.setHours(0, 0, 0, 0);
+
+                    // Get the end of the current week (Saturday)
+                    const endOfWeek = new Date(startOfWeek);
+                    endOfWeek.setDate(startOfWeek.getDate() + 6);
+                    endOfWeek.setHours(23, 59, 59, 999);
+
+                    filteredSessions = sessions.filter(session => {
+                        const sessionDate = new Date(session.stopTime);
+                        return sessionDate >= startOfWeek && sessionDate <= endOfWeek;
+                    });
+                    break;
+                case 'month':
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
+                    endOfMonth.setHours(23, 59, 59, 999);
+
+                    filteredSessions = sessions.filter(session => {
+                        const sessionDate = new Date(session.stopTime);
+                        return sessionDate >= startOfMonth && sessionDate <= endOfMonth;
+                    });
+                    break;
+                default:
+                    filteredSessions = sessions; // Fallback, though current design uses explicit filters
+                    break;
+            }
+
+            filteredSessions.sort((a, b) => new Date(b.stopTime) - new Date(a.stopTime));
+
+            if (filteredSessions.length === 0) {
+                let filterText = '';
+                if (currentSessionFilter === 'today') filterText = 'for today';
+                else if (currentSessionFilter === 'week') filterText = 'for this week';
+                else if (currentSessionFilter === 'month') filterText = 'for this month';
+                sessionsList.insertAdjacentHTML('beforeend', `<p class="text-gray-500 text-center">No sessions recorded ${filterText} yet.</p>`);
+                return;
+            }
+
+            filteredSessions.forEach((session) => {
+                // Ensure notes property exists for older entries
+                if (session.notes === undefined) {
+                    session.notes = '';
+                }
+
+                const li = document.createElement('div');
+                li.classList.add('bg-white', 'p-3', 'rounded-lg', 'shadow-sm', 'mb-2', 'border', 'border-gray-100', 'session-item');
+
+                const emoji = getDurationEmoji(session.durationSeconds);
+                const heartEmoji = (session.durationSeconds >= (90 * 60)) ? '💜 ' : '';
+
+                const summaryRow = document.createElement('div');
+                summaryRow.classList.add('flex', 'justify-between', 'items-center');
+                
+                const habitNameContainer = document.createElement('div');
+                habitNameContainer.classList.add('flex', 'items-center', 'flex-grow');
+                habitNameContainer.id = `habitNameContainer-${session.id}`;
+
+                const habitNameSpan = document.createElement('span');
+                habitNameSpan.classList.add('font-semibold', 'text-gray-600', 'text-base');
+                habitNameSpan.textContent = `✔️ ${session.habitName}`;
+
+                const emojiSpan = document.createElement('span');
+                emojiSpan.classList.add('emoji-display', 'ml-2');
+                emojiSpan.innerHTML = `${heartEmoji}${emoji}`;
+
+                habitNameContainer.appendChild(habitNameSpan);
+                habitNameContainer.appendChild(emojiSpan);
+
+                summaryRow.appendChild(habitNameContainer);
+                
+                const actionsContainer = document.createElement('div');
+                actionsContainer.classList.add('flex', 'items-center', 'space-x-2');
+
+                const detailsToggleSpan = document.createElement('span');
+                detailsToggleSpan.classList.add('text-gray-500', 'text-sm', 'details-toggle-text');
+                detailsToggleSpan.textContent = '👁️‍🗨️';
+                detailsToggleSpan.style.cursor = 'pointer';
+                actionsContainer.appendChild(detailsToggleSpan);
+
+                // New Note-Taking Icon
+                const noteEditButton = document.createElement('span');
+                noteEditButton.classList.add('text-blue-500', 'text-sm');
+                noteEditButton.textContent = '📝';
+                noteEditButton.style.cursor = 'pointer';
+                noteEditButton.title = `Edit notes for "${session.habitName}"`;
+                actionsContainer.appendChild(noteEditButton);
+
+                const deleteButton = document.createElement('span');
+                deleteButton.classList.add('text-red-500', 'text-sm');
+                deleteButton.textContent = '❌';
+                deleteButton.style.cursor = 'pointer';
+                deleteButton.title = `Delete "${session.habitName}"`;
+                actionsContainer.appendChild(deleteButton);
+
+                summaryRow.appendChild(actionsContainer);
+
+                const detailsRow = document.createElement('div');
+                detailsRow.classList.add('details-row', 'mt-1', 'pt-1', 'border-t', 'border-gray-100');
+                detailsRow.innerHTML = `
+                    <p class="text-xs text-gray-600">Started: ${new Date(session.startTime).toLocaleString()}</p>
+                    <p class="text-xs text-gray-600">Stopped: ${new Date(session.stopTime).toLocaleString()}</p>
+                    <p class="text-xs text-gray-600">Duration: ${formatDuration(session.durationSeconds)}</p>
+                `;
+                // Add notes display area
+                const notesDisplay = document.createElement('div');
+                notesDisplay.classList.add('text-xs', 'text-gray-600', 'mt-1', 'notes-area');
+                notesDisplay.id = `notes-${session.id}`;
+                notesDisplay.textContent = session.notes || 'No notes yet.';
+                detailsRow.appendChild(notesDisplay);
+
+
+                li.appendChild(summaryRow);
+                li.appendChild(detailsRow);
+
+                detailsToggleSpan.addEventListener('click', () => {
+                    detailsRow.classList.toggle('show');
+                });
+
+                // Event listener for the new note edit button
+                noteEditButton.addEventListener('click', (event) => {
+                    event.stopPropagation(); // Prevent toggling details if clicked on notes icon
+                    detailsRow.classList.add('show'); // Ensure details are shown
+                    enableNotesEdit(session.id, session.notes);
+                });
+
+                // Event listener for clicking the notes area itself
+                notesDisplay.addEventListener('click', (event) => {
+                    event.stopPropagation(); // Prevent toggling details if clicked on notes area
+                    detailsRow.classList.add('show'); // Ensure details are shown
+                    enableNotesEdit(session.id, session.notes);
+                });
+
+
+                deleteButton.addEventListener('click', () => {
+                    showConfirmModal(`Are you sure to delete "${session.habitName}" activity entry?`, () => {
+                        let sessions = loadSessions();
+                        sessions = sessions.filter(s => s.id !== session.id);
+                        saveSessions(sessions);
+                        showMessage(`Activity "${session.habitName}" deleted.`);
+                        renderSessions();
+                        renderTodaySummary();
+                        renderTimetable();
+                    });
+                });
+
+
+                if (amendActivityNameEnabled) {
+                    habitNameContainer.style.cursor = 'text';
+                    habitNameContainer.title = 'Click to edit habit name';
+
+                    habitNameContainer.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        if (habitNameContainer.querySelector('input')) {
+                            return;
+                        }
+
+                        const currentHabitName = session.habitName;
+                        const inputField = document.createElement('input');
+                        inputField.type = 'text';
+                        inputField.value = currentHabitName;
+                        inputField.classList.add('flex-grow', 'py-1', 'px-2', 'rounded-md', 'border', 'border-blue-300', 'focus:outline-none', 'focus:ring-1', 'focus:ring-blue-500');
+                        inputField.style.minWidth = '100px';
+                        inputField.style.maxWidth = 'calc(100% - 40px)';
+                        inputField.style.marginRight = '8px';
+
+                        habitNameContainer.replaceChild(inputField, habitNameSpan);
+                        inputField.focus();
+
+                        inputField.addEventListener('blur', () => {
+                            const newHabitName = inputField.value.trim();
+                            if (newHabitName && newHabitName !== currentHabitName) {
+                                const sessions = loadSessions();
+                                const sessionIndex = sessions.findIndex(s => s.id === session.id);
+                                if (sessionIndex !== -1) {
+                                    sessions[sessionIndex].habitName = newHabitName;
+                                    saveSessions(sessions);
+                                    showMessage(`Habit name updated to "${newHabitName}"!`);
+                                    renderSessions();
+                                    renderTimetable();
+                                }
+                            } else {
+                                renderSessions();
+                            }
+                        });
+
+                        inputField.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') {
+                                inputField.blur();
+                            }
+                        });
+                    });
+                } else {
+                    habitNameContainer.style.cursor = 'default';
+                    habitNameContainer.title = '';
+                }
+
+                sessionsList.appendChild(li);
+            });
+        }
+
+        // Function to export today's activity log to CSV
+        function exportTodayActivitiesToCsv() {
+            const sessions = loadSessions();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const todaySessions = sessions.filter(session => {
+                const sessionDate = new Date(session.stopTime);
+                sessionDate.setHours(0, 0, 0, 0);
+                return sessionDate.getTime() === today.getTime();
+            });
+
+            if (todaySessions.length === 0) {
+                showMessage("No activities recorded for today to export.");
+                return;
+            }
+
+            const headers = ["Start Time", "Stop Time", "Habit Name", "Duration (minutes)", "Notes"];
+            const rows = todaySessions.map(session => {
+                const startTimeFormatted = new Date(session.startTime).toLocaleString();
+                const stopTimeFormatted = new Date(session.stopTime).toLocaleString();
+                const habitNameCsv = `"${session.habitName.replace(/"/g, '""')}"`; // Escape double quotes
+                const durationMinutes = Math.round(session.durationSeconds / 60);
+                const notesCsv = `"${(session.notes || '').replace(/"/g, '""').replace(/\n/g, '\\n')}"`; // Escape double quotes and newlines
+                return `${startTimeFormatted},${stopTimeFormatted},${habitNameCsv},${durationMinutes},${notesCsv}`;
+            });
+
+            const csvContent = [headers.join(","), ...rows].join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `habit_log_today_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage("Today's activity log exported successfully!");
+        }
+
+        // --- Tab Switching Logic ---
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+
+            const selectedTabContent = document.getElementById(tabId);
+            if (selectedTabContent) {
+                selectedTabContent.style.display = '';
+            } else {
+                console.error(`Error: Could not find tab content with ID: ${tabId}`);
+            }
+
+            if (tabId === 'sessionsList') {
+                sessionsTabBtn.classList.add('active');
+                // sessionFilterButtons visibility is now handled by being inside sessionsList
+                updateFilterButtonsActiveState(); // Update active state for filter buttons
+            } else if (tabId === 'todayTimetable') {
+                timetableTabBtn.classList.add('active');
+                // sessionFilterButtons visibility is now handled by being inside sessionsList, so it will be hidden
+            }
+        }
+
+        // Function to update active state of filter buttons
+        function updateFilterButtonsActiveState() {
+            // Re-get references to the buttons as they are re-rendered with renderSessions()
+            const currentLoadTodayBtn = document.getElementById('loadTodayBtn');
+            const currentLoadWeekBtn = document.getElementById('loadWeekBtn');
+            const currentLoadMonthBtn = document.getElementById('loadMonthBtn');
+
+            [currentLoadTodayBtn, currentLoadWeekBtn, currentLoadMonthBtn].forEach(btn => {
+                if (btn) btn.classList.remove('active-filter');
+            });
+
+            if (currentSessionFilter === 'today' && currentLoadTodayBtn) {
+                currentLoadTodayBtn.classList.add('active-filter');
+            } else if (currentSessionFilter === 'week' && currentLoadWeekBtn) {
+                currentLoadWeekBtn.classList.add('active-filter');
+            } else if (currentSessionFilter === 'month' && currentLoadMonthBtn) {
+                currentLoadMonthBtn.classList.add('active-filter');
+            }
+        }
+
+        // --- Settings Modal Functions ---
+        function openSettingsPopup() {
+            settingsModalOverlay.classList.add('show');
+        }
+
+        function closeSettingsPopup() {
+            settingsModalOverlay.classList.remove('show');
+        }
+
+        // Function to control the main toggle button's state (text, styling, disabled)
+        function setToggleButtonState(state) {
+            currentButtonState = state;
+            toggleButton.disabled = false; // Default to enabled, disable specifically if needed
+            toggleButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'focus:ring-blue-500', 
+                                           'bg-red-600', 'hover:bg-red-700', 'focus:ring-red-500',
+                                           'bg-gray-500', 'cursor-not-allowed', 'bg-green-600', 'hover:bg-green-700', 'focus:ring-green-500'); 
+
+            // Reset habit input state
+            habitNameInput.disabled = false;
+            if (state === 'start' || state === 'break-done') { // Clear input only when ready for new input
+                habitNameInput.value = ''; 
+            }
+
+            switch (state) {
+                case 'start':
+                    toggleButton.textContent = 'Start';
+                    toggleButton.classList.add('bg-blue-600', 'hover:bg-blue-700', 'focus:ring-blue-500');
+                    break;
+                case 'stop':
+                    toggleButton.textContent = 'Stop';
+                    toggleButton.classList.add('bg-red-600', 'hover:bg-red-700', 'focus:ring-red-500');
+                    habitNameInput.disabled = true;
+                    break;
+                case 'break-ongoing':
+                    toggleButton.textContent = 'Break Ongoing';
+                    toggleButton.classList.add('bg-gray-500', 'cursor-not-allowed');
+                    toggleButton.disabled = true;
+                    habitNameInput.disabled = true;
+                    break;
+                case 'break-done':
+                    toggleButton.textContent = 'Stop Rest Break!'; // Changed text here
+                    toggleButton.classList.add('bg-green-600', 'hover:bg-green-700', 'focus:ring-green-500');
+                    // habitNameInput.disabled remains false here
+                    break;
+            }
+        }
+
+
+        // Function to initialize the button state and ongoing activity on page load
+        function initializeButtonState() {
+            const storedOngoingSession = localStorage.getItem('ongoingHabitSession');
+            if (storedOngoingSession) {
+                ongoingSessionData = JSON.parse(storedOngoingSession);
+                startTime = new Date(ongoingSessionData.startTime); // This sets startTime correctly
+                
+                if (ongoingSessionData.isBreak) {
+                    isBreakActive = true;
+                    breakStartTime = startTime;
+                    // If the page reloads while a break is active and already past 5 mins, set to break-done
+                    const now = new Date();
+                    const elapsedBreakSeconds = Math.floor((now.getTime() - breakStartTime.getTime()) / 1000);
+                    if (elapsedBreakSeconds >= POMODORO_BREAK_DURATION_SECONDS) {
+                        setToggleButtonState('break-done');
+                        if (restAlarmEnabled && !restAlarmTriggered) { // Trigger alarm on reload if due
+                            triggerAlarmSound('rest');
+                            restAlarmTriggered = true;
+                        }
+                    } else {
+                        setToggleButtonState('break-ongoing');
+                    }
+                } else {
+                    isBreakActive = false;
+                    habitNameInput.value = ongoingSessionData.habitName; // Restore habit name
+                    setToggleButtonState('stop');
+                }
+                
+                displayOngoingActivity();
+                startOngoingTimer();
+            } else {
+                startTime = null;
+                ongoingSessionData = null;
+                isBreakActive = false;
+                breakStartTime = null; // Ensure break state is reset
+                restAlarmTriggered = false; // Reset for a clean start
+                setToggleButtonState('start'); // Set to 'start' if no ongoing session
+                displayOngoingActivity();
+                stopOngoingTimer(); // This will clear ongoingTimerInterval
+                stopAlarmSound(); // Explicitly stop any lingering alarm sound
+                showTab('sessionsList'); // Ensure sessions list is shown on initial load
+            }
+        }
+
+        // --- Event Listener for the Toggle Button ---
+        toggleButton.addEventListener('click', () => {
+            if (currentButtonState === 'start') {
+                let habitName = habitNameInput.value.trim();
+                if (!habitName) {
+                    habitName = "New time slot";
+                }
+                
+                if (ongoingSessionData) {
+                    showMessage("You already have an ongoing habit. Please stop it first!");
+                    return;
+                }
+
+                startTime = new Date();
+                ongoingSessionData = {
+                    habitName: habitName,
+                    startTime: startTime.toISOString(),
+                    notes: '' // Initialize notes for new activities
+                };
+                localStorage.setItem('ongoingHabitSession', JSON.stringify(ongoingSessionData));
+
+                setToggleButtonState('stop'); // Change button to 'Stop'
+                
+                showMessage(`Started tracking "${habitName}"!`);
+                displayOngoingActivity();
+                startOngoingTimer();
+            } else if (currentButtonState === 'stop') {
+                if (!startTime || !ongoingSessionData) {
+                    showMessage("Error: No active session found. Please click 'Start' to begin a new session.");
+                    initializeButtonState();
+                    return;
+                }
+                
+                const stopTime = new Date();
+                const durationMs = stopTime.getTime() - startTime.getTime();
+                const durationSeconds = Math.floor(durationMs / 1000);
+
+                const sessionData = {
+                    habitName: ongoingSessionData.habitName,
+                    startTime: ongoingSessionData.startTime,
+                    stopTime: stopTime.toISOString(),
+                    durationSeconds: durationSeconds,
+                    id: Date.now(),
+                    notes: ongoingSessionData.notes || '' // Preserve existing notes or set to empty
+                };
+
+                const sessions = loadSessions();
+                sessions.push(sessionData);
+                saveSessions(sessions);
+                console.log("Activity logged on Stop:", sessionData);
+
+                showMessage(`Stopped "${sessionData.habitName}". Duration: ${formatDuration(durationSeconds)}.`);
+                
+                stopAlarmSound(); // Explicitly stop any ongoing pomodoro alarm
+
+                // FIX: Ensure rendering happens immediately after stopping activity
+                renderSessions();
+                renderTodaySummary();
+                renderTimetable();
+
+                localStorage.removeItem('ongoingHabitSession'); // Clear ongoing session data
+                ongoingSessionData = null; // Clear ongoing session in memory
+
+
+                if (pomodoroAlarmEnabled) {
+                    startPomodoroBreak();
+                } else {
+                    initializeButtonState(); // Reset to Start state if no break
+                }
+            } else if (currentButtonState === 'break-done') {
+                // When button is 'Break Done!', clicking it should lead to 'Start' state
+                completePomodoroBreakSession(); // Log the break session on click
+                stopAlarmSound(); // Stop the repeating rest alarm
+                // restAlarmTriggered is already reset in completePomodoroBreakSession
+                initializeButtonState(); // This will set the state to 'start'
+                renderSessions();
+                renderTodaySummary();
+                renderTimetable();
+            }
+            // If currentButtonState is 'break-ongoing', the button is disabled, so this handler won't fire.
+        }); 
+
+        // --- Initial Load ---
+        openSettingsBtn.addEventListener('click', openSettingsPopup);
+        closeSettingsBtn.addEventListener('click', closeSettingsPopup);
+        showOngoingTimerToggle.addEventListener('change', saveSettings);
+        pomodoroAlarmToggle.addEventListener('change', saveSettings);
+        amendActivityNameToggle.addEventListener('change', saveSettings);
+        exportActivityToggle.addEventListener('change', saveSettings);
+        restAlarmSoundToggle.addEventListener('change', saveSettings);
+        restAlarmSoundSelect.addEventListener('change', saveSettings);
+        exportCsvButton.addEventListener('click', exportTodayActivitiesToCsv);
+        ongoingAlarmSign.addEventListener('click', stopAlarmSound);
+
+        sessionsTabBtn.addEventListener('click', () => {
+            showTab('sessionsList');
+            currentSessionFilter = 'today'; // Reset filter to today when sessions tab is clicked
+            renderSessions(); // Re-render with today's filter
+        });
+        timetableTabBtn.addEventListener('click', () => {
+            showTab('todayTimetable');
+        });
+
+        // New filter button event listeners are now attached within renderSessions()
+        // since the filter buttons are re-rendered with the sessions list.
+
+
+        window.onload = () => {
+            loadSettings();
+            initAlarmSynth();
+            initializeButtonState();
+            renderSessions(); // Initial render of sessions based on default filter ('today')
+            renderTodaySummary();
+            renderTimetable();
+        };
+    </script>
+</body>
+</html>
